@@ -18,39 +18,11 @@ it, you should have the following directory structure:
     └── web
         └── index.php
 
-If you want more flexibility, use Composer_ instead. Create a
-``composer.json`` file and put this in it:
-
-.. code-block:: json
-
-    {
-        "require": {
-            "silex/silex": "~2.0"
-        }
-    }
-
-And run Composer to install Silex and all its dependencies:
+If you want more flexibility, use Composer_ instead:
 
 .. code-block:: bash
 
-    $ curl -s http://getcomposer.org/installer | php
-    $ php composer.phar install
-
-.. tip::
-
-    By default, Silex relies on the stable Symfony components. If you want to
-    use their master version instead, add ``"minimum-stability": "dev"`` in
-    your ``composer.json`` file.
-
-Upgrading
----------
-
-Upgrading Silex to the latest version is as easy as running the ``update``
-command:
-
-.. code-block:: bash
-
-    $ php composer.phar update
+    composer require silex/silex:~2.0
 
 Bootstrap
 ---------
@@ -518,7 +490,7 @@ takes an ``Exception`` argument and returns a response::
 
     use Symfony\Component\HttpFoundation\Response;
 
-    $app->error(function (\Exception $e, $code) {
+    $app->error(function (\Exception $e, $request, $code) {
         return new Response('We are sorry, but something went terribly wrong.');
     });
 
@@ -527,7 +499,7 @@ handle them differently::
 
     use Symfony\Component\HttpFoundation\Response;
 
-    $app->error(function (\Exception $e, $code) {
+    $app->error(function (\Exception $e, $request, $code) {
         switch ($code) {
             case 404:
                 $message = 'The requested page could not be found.';
@@ -551,7 +523,7 @@ handle them differently::
 You can restrict an error handler to only handle some Exception classes by
 setting a more specific type hint for the Closure argument::
 
-    $app->error(function (\LogicException $e, $code) {
+    $app->error(function (\LogicException $e, $request, $code) {
         // this handler will only handle \LogicException exceptions
         // and exceptions that extends \LogicException
     });
@@ -575,7 +547,7 @@ once a response is returned, the following handlers are ignored.
 
         use Symfony\Component\HttpFoundation\Response;
 
-        $app->error(function (\Exception $e, $code) use ($app) {
+        $app->error(function (\Exception $e, $request, $code) use ($app) {
             if ($app['debug']) {
                 return;
             }
