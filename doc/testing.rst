@@ -30,7 +30,7 @@ it can be used for functional tests too. You write tests by creating a new
 class, that extends the ``PHPUnit_Framework_TestCase``. Your test cases are
 methods prefixed with ``test``::
 
-    class ContactFormTest extends PHPUnit_Framework_TestCase
+    class ContactFormTest extends \PHPUnit_Framework_TestCase
     {
         public function testInitialPage()
         {
@@ -54,7 +54,7 @@ page loaded correctly and contains our form::
 
 Here you see some of the available assertions. There is a full list available
 in the `Writing Tests for PHPUnit
-<http://www.phpunit.de/manual/current/en/writing-tests-for-phpunit.html>`_
+<https://phpunit.de/manual/current/en/writing-tests-for-phpunit.html>`_
 section of the PHPUnit documentation.
 
 WebTestCase
@@ -75,6 +75,19 @@ use it by making your test extend it::
 
     To make your application testable, you need to make sure you follow "Reusing
     applications" instructions from :doc:`usage`.
+
+.. note::
+
+    If you want to use the Symfony2 ``WebTestCase`` class you will need to
+    explicitly install its dependencies for your project. Add the following to
+    your ``composer.json`` file:
+
+    .. code-block:: json
+
+        "require-dev": {
+            "symfony/browser-kit": ">=2.3,<2.4-dev",
+            "symfony/css-selector": ">=2.3,<2.4-dev"
+        }
 
 For your WebTestCase, you will have to implement a ``createApplication``
 method, which returns your application. It will probably look like this::
@@ -113,7 +126,7 @@ executed before every test.
         {
             // ...
 
-            $this->app['session.test'] = true;
+            $app['session.test'] = true;
 
             // ...
         }

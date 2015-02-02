@@ -12,15 +12,24 @@ Parameters
 ----------
 
 * **monolog.logfile**: File where logs are written to.
+* **monolog.bubble** = (optional) Whether the messages that are handled can bubble up the stack or not.
+* **monolog.permission** = (optional) File permissions default (null), nothing change.
 
-* **monolog.level** (optional): Level of logging defaults
+* **monolog.level** (optional): Level of logging, defaults
   to ``DEBUG``. Must be one of ``Logger::DEBUG``, ``Logger::INFO``,
   ``Logger::WARNING``, ``Logger::ERROR``. ``DEBUG`` will log
   everything, ``INFO`` will log everything except ``DEBUG``,
   etc.
 
+  In addition to the ``Logger::`` constants, it is also possible to supply the
+  level in string form, for example: ``"DEBUG"``, ``"INFO"``, ``"WARNING"``,
+  ``"ERROR"``.
+
 * **monolog.name** (optional): Name of the monolog channel,
   defaults to ``myapp``.
+
+* **monolog.exception.logger_filter** (optional): An anonymous function that
+  filters which exceptions should be logged.
 
 Services
 --------
@@ -30,6 +39,8 @@ Services
   Example usage::
 
     $app['monolog']->addDebug('Testing the Monolog logging.');
+
+* **monolog.listener**: An event listener to log requests, responses and errors.
 
 Registering
 -----------
@@ -49,7 +60,7 @@ Registering
     .. code-block:: json
 
         "require": {
-            "monolog/monolog": ">=1.0.0",
+            "monolog/monolog": ">=1.0.0"
         }
 
 Usage
@@ -75,11 +86,15 @@ Customization
 You can configure Monolog (like adding or changing the handlers) before using
 it by extending the ``monolog`` service::
 
-    $app['monolog'] = $app->share($app->extend('monolog', function($monolog, $app) {
+    $app->extend('monolog', function($monolog, $app) {
         $monolog->pushHandler(...);
 
         return $monolog;
-    }));
+    });
+
+By default, all requests, responses and errors are logged by an event listener
+registered as a service called `monolog.listener`. You can replace or remove
+this service if you want to modify or disable the logged information.
 
 Traits
 ------

@@ -11,81 +11,99 @@
 
 namespace Silex\Provider;
 
+use Pimple\Container;
+use Pimple\ServiceProviderInterface;
+use Monolog\Formatter\LineFormatter;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 use Silex\Application;
-use Silex\ServiceProviderInterface;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
+use Silex\Api\BootableProviderInterface;
 use Symfony\Bridge\Monolog\Handler\DebugHandler;
-use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Silex\EventListener\LogListener;
 
 /**
  * Monolog Provider.
  *
  * @author Fabien Potencier <fabien@symfony.com>
  */
-class MonologServiceProvider implements ServiceProviderInterface
+class MonologServiceProvider implements ServiceProviderInterface, BootableProviderInterface
 {
-    public function register(Application $app)
+    public function register(Container $app)
     {
-        if ($bridge = class_exists('Symfony\Bridge\Monolog\Logger')) {
-            $app['logger'] = function () use ($app) {
-                return $app['monolog'];
-            };
+        $app['logger'] = function () use ($app) {
+            return $app['monolog'];
+        };
 
+        if ($bridge = class_exists('Symfony\Bridge\Monolog\Logger')) {
             $app['monolog.handler.debug'] = function () use ($app) {
-                return new DebugHandler($app['monolog.level']);
+                $level = MonologServiceProvider::translateLevel($app['monolog.level']);
+
+                return new DebugHandler($level);
             };
         }
 
         $app['monolog.logger.class'] = $bridge ? 'Symfony\Bridge\Monolog\Logger' : 'Monolog\Logger';
 
-        $app['monolog'] = $app->share(function ($app) {
+        $app['monolog'] = function ($app) {
             $log = new $app['monolog.logger.class']($app['monolog.name']);
 
             $log->pushHandler($app['monolog.handler']);
 
-            if ($app['debug'] && isset($app['monolog.handler.debug'])) {
+            if (isset($app['debug']) && $app['debug'] && isset($app['monolog.handler.debug'])) {
                 $log->pushHandler($app['monolog.handler.debug']);
             }
 
             return $log;
-        });
+        };
+
+        $app['monolog.formatter'] = function () {
+            return new LineFormatter();
+        };
 
         $app['monolog.handler'] = function () use ($app) {
-            return new StreamHandler($app['monolog.logfile'], $app['monolog.level']);
+            $level = MonologServiceProvider::translateLevel($app['monolog.level']);
+
+            $handler = new StreamHandler($app['monolog.logfile'], $level, $app['monolog.bubble'], $app['monolog.permission']);
+            $handler->setFormatter($app['monolog.formatter']);
+
+            return $handler;
         };
 
         $app['monolog.level'] = function () {
             return Logger::DEBUG;
         };
 
+        $app['monolog.listener'] = function () use ($app) {
+            return new LogListener($app['logger'], $app['monolog.exception.logger_filter']);
+        };
+
         $app['monolog.name'] = 'myapp';
+        $app['monolog.bubble'] = true;
+        $app['monolog.permission'] = null;
+        $app['monolog.exception.logger_filter'] = null;
     }
 
     public function boot(Application $app)
     {
-        // BC: to be removed before 1.0
-        if (isset($app['monolog.class_path'])) {
-            throw new \RuntimeException('You have provided the monolog.class_path parameter. The autoloader has been removed from Silex. It is recommended that you use Composer to manage your dependencies and handle your autoloading. If you are already using Composer, you can remove the parameter. See http://getcomposer.org for more information.');
+        if (isset($app['monolog.listener'])) {
+            $app['dispatcher']->addSubscriber($app['monolog.listener']);
+        }
+    }
+
+    public static function translateLevel($name)
+    {
+        // level is already translated to logger constant, return as-is
+        if (is_int($name)) {
+            return $name;
         }
 
-        $app->before(function (Request $request) use ($app) {
-            $app['monolog']->addInfo('> '.$request->getMethod().' '.$request->getRequestUri());
-        });
+        $levels = Logger::getLevels();
+        $upper = strtoupper($name);
 
-        $app->error(function (\Exception $e) use ($app) {
-            $message = sprintf('%s: %s (uncaught exception) at %s line %s', get_class($e), $e->getMessage(), $e->getFile(), $e->getLine());
-            if ($e instanceof HttpExceptionInterface && $e->getStatusCode() < 500) {
-                $app['monolog']->addError($message);
-            } else {
-                $app['monolog']->addCritical($message);
-            }
-        }, 255);
+        if (!isset($levels[$upper])) {
+            throw new \InvalidArgumentException("Provided logging level '$name' does not exist. Must be a valid monolog logging level.");
+        }
 
-        $app->after(function (Request $request, Response $response) use ($app) {
-            $app['monolog']->addInfo('< '.$response->getStatusCode());
-        });
+        return $levels[$upper];
     }
 }

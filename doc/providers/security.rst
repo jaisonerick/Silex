@@ -7,7 +7,8 @@ your applications.
 Parameters
 ----------
 
-n/a
+* **security.hide_user_not_found** (optional): Defines whether to hide user not
+  found exception or not. Defaults to ``true``.
 
 Services
 --------
@@ -47,9 +48,9 @@ Registering
 
 .. code-block:: php
 
-    $app->register(new Silex\Provider\SecurityServiceProvider(array(
+    $app->register(new Silex\Provider\SecurityServiceProvider(), array(
         'security.firewalls' => // see below
-    )));
+    ));
 
 .. note::
 
@@ -60,8 +61,13 @@ Registering
     .. code-block:: json
 
         "require": {
-            "symfony/security": "2.1.*"
+            "symfony/security": "~2.3"
         }
+
+.. caution::
+
+    If you're using a form to authenticate users, you need to enable
+    ``SessionServiceProvider``.
 
 .. caution::
 
@@ -76,7 +82,7 @@ Usage
 
 The Symfony Security component is powerful. To learn more about it, read the
 `Symfony2 Security documentation
-<http://symfony.com/doc/2.1/book/security.html>`_.
+<http://symfony.com/doc/2.3/book/security.html>`_.
 
 .. tip::
 
@@ -101,7 +107,7 @@ is known, you can get it with a call to ``getUser()``::
         $user = $token->getUser();
     }
 
-The user can be a string, and object with a ``__toString()`` method, or an
+The user can be a string, an object with a ``__toString()`` method, or an
 instance of `UserInterface
 <http://api.symfony.com/master/Symfony/Component/Security/Core/User/UserInterface.html>`_.
 
@@ -152,6 +158,19 @@ When the user is authenticated, the user stored in the token is an instance of
 `User
 <http://api.symfony.com/master/Symfony/Component/Security/Core/User/User.html>`_
 
+.. caution::
+
+    If you are using php-cgi under Apache, you need to add this configuration
+    to make things work correctly:
+
+    .. code-block:: apache
+
+        RewriteEngine On
+        RewriteCond %{HTTP:Authorization} ^(.+)$
+        RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+        RewriteCond %{REQUEST_FILENAME} !-f
+        RewriteRule ^(.*)$ app.php [QSA,L]
+
 Securing a Path with a Form
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -159,9 +178,9 @@ Using a form to authenticate users is very similar to the above configuration.
 Instead of using the ``http`` setting, use the ``form`` one and define these
 two parameters:
 
-* **login_path**: The login path where the user is redirected when he is
-  accessing a secured area without being authenticated so that he can enter
-  his credentials;
+* **login_path**: The login path where the user is redirected when they are
+  accessing a secured area without being authenticated so that they can enter
+  their credentials;
 
 * **check_path**: The check URL used by Symfony to validate the credentials of
   the user.
@@ -247,6 +266,21 @@ The order of the firewall configurations is significant as the first one to
 match wins. The above configuration first ensures that the ``/login`` URL is
 not secured (no authentication settings), and then it secures all other URLs.
 
+.. tip::
+
+    You can toggle all registered authentication mechanisms for a particular
+    area on and off with the ``security`` flag::
+
+        $app['security.firewalls'] = array(
+            'api' => array(
+                'pattern' => '^/api',
+                'security' => $app['debug'] ? false : true,
+                'wsse' => true,
+
+                // ...
+            ),
+        );
+
 Adding a Logout
 ~~~~~~~~~~~~~~~
 
@@ -269,7 +303,7 @@ are replaced with ``_`` and the leading ``/`` is stripped):
 
 .. code-block:: jinja
 
-    <a href="{{ path('logout') }}">Logout</a>
+    <a href="{{ path('admin_logout') }}">Logout</a>
 
 Allowing Anonymous Users
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -296,7 +330,7 @@ Checking User Roles
 To check if a user is granted some role, use the ``isGranted()`` method on the
 security context::
 
-    if ($app['security']->isGranted('ROLE_ADMIN') {
+    if ($app['security']->isGranted('ROLE_ADMIN')) {
         // ...
     }
 
@@ -356,7 +390,7 @@ parameter to any URL when logged in as a user who has the
 
 You can check that you are impersonating a user by checking the special
 ``ROLE_PREVIOUS_ADMIN``. This is useful for instance to allow the user to
-switch back to his primary account:
+switch back to their primary account:
 
 .. code-block:: jinja
 
@@ -411,9 +445,9 @@ The ``users`` setting can be defined as a service that returns an instance of
 `UserProviderInterface
 <http://api.symfony.com/master/Symfony/Component/Security/Core/User/UserProviderInterface.html>`_::
 
-    'users' => $app->share(function () use ($app) {
+    'users' => function () use ($app) {
         return new UserProvider($app['db']);
-    }),
+    },
 
 Here is a simple example of a user provider, where Doctrine DBAL is used to
 store the users::
@@ -482,8 +516,17 @@ sample users::
 
         $schema->createTable($users);
 
-        $app['db']->executeQuery('INSERT INTO users (username, password, roles) VALUES ("fabien", "5FZ2Z8QIkA7UTZ4BYkoC+GsReLf569mSKDsfods6LYQ8t+a8EW9oaircfMpmaLbPBh4FOBiiFyLfuZmTSUwzZg==", "ROLE_USER")');
-        $app['db']->executeQuery('INSERT INTO users (username, password, roles) VALUES ("admin", "5FZ2Z8QIkA7UTZ4BYkoC+GsReLf569mSKDsfods6LYQ8t+a8EW9oaircfMpmaLbPBh4FOBiiFyLfuZmTSUwzZg==", "ROLE_ADMIN")');
+        $app['db']->insert('users', array(
+          'username' => 'fabien',
+          'password' => '5FZ2Z8QIkA7UTZ4BYkoC+GsReLf569mSKDsfods6LYQ8t+a8EW9oaircfMpmaLbPBh4FOBiiFyLfuZmTSUwzZg==',
+          'roles' => 'ROLE_USER'
+        ));
+
+        $app['db']->insert('users', array(
+          'username' => 'admin',
+          'password' => '5FZ2Z8QIkA7UTZ4BYkoC+GsReLf569mSKDsfods6LYQ8t+a8EW9oaircfMpmaLbPBh4FOBiiFyLfuZmTSUwzZg==',
+          'roles' => 'ROLE_ADMIN'
+        ));
     }
 
 .. tip::
@@ -502,12 +545,12 @@ service::
 
     use Symfony\Component\Security\Core\Encoder\MessageDigestPasswordEncoder;
 
-    $app['security.encoder.digest'] = $app->share(function ($app) {
+    $app['security.encoder.digest'] = function ($app) {
         // use the sha1 algorithm
         // don't base64 encode the password
         // use only 1 iteration
         return new MessageDigestPasswordEncoder('sha1', false, 1);
-    });
+    };
 
 Defining a custom Authentication Provider
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -520,14 +563,14 @@ use in your configuration::
 
     $app['security.authentication_listener.factory.wsse'] = $app->protect(function ($name, $options) use ($app) {
         // define the authentication provider object
-        $app['security.authentication_provider.'.$name.'.wsse'] = $app->share(function () use ($app) {
+        $app['security.authentication_provider.'.$name.'.wsse'] = function () use ($app) {
             return new WsseProvider($app['security.user_provider.default'], __DIR__.'/security_cache');
-        });
+        };
 
         // define the authentication listener object
-        $app['security.authentication_listener.'.$name.'.wsse'] = $app->share(function () use ($app) {
+        $app['security.authentication_listener.'.$name.'.wsse'] = function () use ($app) {
             return new WsseListener($app['security'], $app['security.authentication_manager']);
-        });
+        };
 
         return array(
             // the authentication provider id
@@ -560,6 +603,23 @@ argument of your authentication factory (see above).
 
 This example uses the authentication provider classes as described in the
 Symfony `cookbook`_.
+
+Stateless Authentication
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+By default, a session cookie is created to persist the security context of
+the user. However, if you use certificates, HTTP authentication, WSSE and so
+on, the credentials are sent for each request. In that case, you can turn off
+persistence by activating the ``stateless`` authentication flag::
+
+    $app['security.firewalls'] = array(
+        'default' => array(
+            'stateless' => true,
+            'wsse' => true,
+
+            // ...
+        ),
+    );
 
 Traits
 ------

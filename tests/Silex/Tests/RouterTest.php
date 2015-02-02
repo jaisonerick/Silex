@@ -12,11 +12,9 @@
 namespace Silex\Tests;
 
 use Silex\Application;
-
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\RedirectResponse;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Router test cases.
@@ -97,7 +95,7 @@ class RouterTest extends \PHPUnit_Framework_TestCase
     }
 
     /**
-    * @expectedException Symfony\Component\HttpKernel\Exception\NotFoundHttpException
+    * @expectedException \Symfony\Component\HttpKernel\Exception\NotFoundHttpException
     */
     public function testMissingRoute()
     {
@@ -132,6 +130,10 @@ class RouterTest extends \PHPUnit_Framework_TestCase
             return 'put resource';
         });
 
+        $app->patch('/resource', function () {
+            return 'patch resource';
+        });
+
         $app->delete('/resource', function () {
             return 'delete resource';
         });
@@ -142,6 +144,7 @@ class RouterTest extends \PHPUnit_Framework_TestCase
         $this->checkRouteResponse($app, '/resource', 'get resource');
         $this->checkRouteResponse($app, '/resource', 'post resource', 'post');
         $this->checkRouteResponse($app, '/resource', 'put resource', 'put');
+        $this->checkRouteResponse($app, '/resource', 'patch resource', 'patch');
         $this->checkRouteResponse($app, '/resource', 'delete resource', 'delete');
     }
 
@@ -149,12 +152,12 @@ class RouterTest extends \PHPUnit_Framework_TestCase
     {
         $app = new Application();
 
-        $app->get('/foo', function () use ($app) {
-            return new Response($app['request']->getRequestUri());
+        $app->get('/foo', function (Request $request) use ($app) {
+            return new Response($request->getRequestUri());
         });
 
-        $app->error(function ($e) use ($app) {
-            return new Response($app['request']->getRequestUri());
+        $app->error(function ($e, Request $request, $code) use ($app) {
+            return new Response($request->getRequestUri());
         });
 
         foreach (array('/foo', '/bar') as $path) {
@@ -177,6 +180,14 @@ class RouterTest extends \PHPUnit_Framework_TestCase
 
         $this->assertEquals(301, $response->getStatusCode());
         $this->assertEquals('/foo/', $response->getTargetUrl());
+    }
+
+    public function testHostSpecification()
+    {
+        $route = new \Silex\Route();
+
+        $this->assertSame($route, $route->host('{locale}.example.com'));
+        $this->assertEquals('{locale}.example.com', $route->getHost());
     }
 
     public function testRequireHttpRedirect()
@@ -207,6 +218,20 @@ class RouterTest extends \PHPUnit_Framework_TestCase
         $this->assertTrue($response->isRedirect('https://example.com/secured'));
     }
 
+    public function testRequireHttpsRedirectIncludesQueryString()
+    {
+        $app = new Application();
+
+        $app->match('/secured', function () {
+            return 'secured content';
+        })
+        ->requireHttps();
+
+        $request = Request::create('http://example.com/secured?query=string');
+        $response = $app->handle($request);
+        $this->assertTrue($response->isRedirect('https://example.com/secured?query=string'));
+    }
+
     public function testClassNameControllerSyntax()
     {
         $app = new Application();
@@ -225,7 +250,7 @@ class RouterTest extends \PHPUnit_Framework_TestCase
         $this->checkRouteResponse($app, '/bar', 'bar');
     }
 
-    protected function checkRouteResponse($app, $path, $expectedContent, $method = 'get', $message = null)
+    protected function checkRouteResponse(Application $app, $path, $expectedContent, $method = 'get', $message = null)
     {
         $request = Request::create($path, $method);
         $response = $app->handle($request);

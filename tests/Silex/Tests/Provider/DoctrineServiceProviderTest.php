@@ -11,6 +11,7 @@
 
 namespace Silex\Tests\Provider;
 
+use Pimple\Container;
 use Silex\Application;
 use Silex\Provider\DoctrineServiceProvider;
 
@@ -21,13 +22,6 @@ use Silex\Provider\DoctrineServiceProvider;
  */
 class DoctrineServiceProviderTest extends \PHPUnit_Framework_TestCase
 {
-    public function setUp()
-    {
-        if (!is_dir(__DIR__.'/../../../../vendor/doctrine/common/lib') || !is_dir(__DIR__.'/../../../../vendor/doctrine/dbal/lib')) {
-            $this->markTestSkipped('Doctrine Common/DBAL dependencies were not installed.');
-        }
-    }
-
     public function testOptionsInitializer()
     {
         $app = new Application();
@@ -38,6 +32,10 @@ class DoctrineServiceProviderTest extends \PHPUnit_Framework_TestCase
 
     public function testSingleConnection()
     {
+        if (!in_array('sqlite', \PDO::getAvailableDrivers())) {
+            $this->markTestSkipped('pdo_sqlite is not available');
+        }
+
         $app = new Application();
         $app->register(new DoctrineServiceProvider(), array(
             'db.options' => array('driver' => 'pdo_sqlite', 'memory' => true),
@@ -55,6 +53,10 @@ class DoctrineServiceProviderTest extends \PHPUnit_Framework_TestCase
 
     public function testMultipleConnections()
     {
+        if (!in_array('sqlite', \PDO::getAvailableDrivers())) {
+            $this->markTestSkipped('pdo_sqlite is not available');
+        }
+
         $app = new Application();
         $app->register(new DoctrineServiceProvider(), array(
             'dbs.options' => array(
@@ -76,5 +78,39 @@ class DoctrineServiceProviderTest extends \PHPUnit_Framework_TestCase
         $params = $db2->getParams();
         $this->assertTrue(array_key_exists('path', $params));
         $this->assertEquals(sys_get_temp_dir().'/silex', $params['path']);
+    }
+
+    public function testLoggerLoading()
+    {
+        if (!in_array('sqlite', \PDO::getAvailableDrivers())) {
+            $this->markTestSkipped('pdo_sqlite is not available');
+        }
+
+        $app = new Application();
+        $this->assertTrue(isset($app['logger']));
+        $this->assertNull($app['logger']);
+        $app->register(new DoctrineServiceProvider(), array(
+            'dbs.options' => array(
+                'sqlite1' => array('driver' => 'pdo_sqlite', 'memory' => true),
+            ),
+        ));
+        $this->assertEquals(22, $app['db']->fetchColumn('SELECT 22'));
+        $this->assertNull($app['db']->getConfiguration()->getSQLLogger());
+    }
+
+    public function testLoggerNotLoaded()
+    {
+        if (!in_array('sqlite', \PDO::getAvailableDrivers())) {
+            $this->markTestSkipped('pdo_sqlite is not available');
+        }
+
+        $app = new Container();
+        $app->register(new DoctrineServiceProvider(), array(
+            'dbs.options' => array(
+                'sqlite1' => array('driver' => 'pdo_sqlite', 'memory' => true),
+            ),
+        ));
+        $this->assertEquals(22, $app['db']->fetchColumn('SELECT 22'));
+        $this->assertNull($app['db']->getConfiguration()->getSQLLogger());
     }
 }

@@ -15,6 +15,8 @@ use Silex\Application;
 use Silex\Provider\ValidatorServiceProvider;
 use Silex\Provider\FormServiceProvider;
 use Symfony\Component\Validator\Constraints as Assert;
+use Silex\Tests\Provider\ValidatorServiceProviderTest\Constraint\Custom;
+use Silex\Tests\Provider\ValidatorServiceProviderTest\Constraint\CustomValidator;
 
 /**
  * ValidatorServiceProvider
@@ -23,20 +25,41 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 class ValidatorServiceProviderTest extends \PHPUnit_Framework_TestCase
 {
-    public function setUp()
-    {
-        if (!is_dir(__DIR__.'/../../../../vendor/symfony/validator')) {
-            $this->markTestSkipped('Validator dependency was not installed.');
-        }
-    }
-
     public function testRegister()
     {
         $app = new Application();
-
         $app->register(new ValidatorServiceProvider());
+        $app->register(new FormServiceProvider());
 
         return $app;
+    }
+
+    public function testRegisterWithCustomValidators()
+    {
+        $app = new Application();
+
+        $app['custom.validator'] = function() {
+            return new CustomValidator();
+        };
+
+        $app->register(new ValidatorServiceProvider(), array(
+            'validator.validator_service_ids' => array(
+                'test.custom.validator' => 'custom.validator',
+            ),
+        ));
+
+        return $app;
+    }
+
+    /**
+     * @depends testRegisterWithCustomValidators
+     */
+    public function testConstraintValidatorFactory($app)
+    {
+        $this->assertInstanceOf('Silex\Provider\Validator\ConstraintValidatorFactory', $app['validator.validator_factory']);
+
+        $validator = $app['validator.validator_factory']->getInstance(new Custom());
+        $this->assertInstanceOf('Silex\Tests\Provider\ValidatorServiceProviderTest\Constraint\CustomValidator', $validator);
     }
 
     /**
@@ -53,13 +76,6 @@ class ValidatorServiceProviderTest extends \PHPUnit_Framework_TestCase
      */
     public function testValidatorConstraint($email, $isValid, $nbGlobalError, $nbEmailError, $app)
     {
-        if (!is_dir(__DIR__ . '/../../../../vendor/symfony/form')) {
-            $this->markTestSkipped('Form component was not installed.');
-        }
-
-        $app->register(new ValidatorServiceProvider());
-        $app->register(new FormServiceProvider());
-
         $constraints = new Assert\Collection(array(
             'email' => array(
                 new Assert\NotBlank(),
@@ -68,8 +84,8 @@ class ValidatorServiceProviderTest extends \PHPUnit_Framework_TestCase
         ));
 
         $builder = $app['form.factory']->createBuilder('form', array(), array(
-            'validation_constraint' => $constraints,
-            'csrf_protection'       => false,
+            'constraints'     => $constraints,
+            'csrf_protection' => false,
         ));
 
         $form = $builder
@@ -93,5 +109,4 @@ class ValidatorServiceProviderTest extends \PHPUnit_Framework_TestCase
             array('email@sample.com', true, 0, 0),
         );
     }
-
 }

@@ -13,7 +13,7 @@ Parameters
 * **locale** (optional): The locale for the translator. You will most likely
   want to set this based on some request parameter. Defaults to ``en``.
 
-* **locale_fallback** (optional): Fallback locale for the translator. It will
+* **locale_fallbacks** (optional): Fallback locales for the translator. It will
   be used when the current locale has no messages set. Defaults to ``en``.
 
 Services
@@ -37,8 +37,9 @@ Registering
 
 .. code-block:: php
 
+    $app->register(new Silex\Provider\LocaleServiceProvider());
     $app->register(new Silex\Provider\TranslationServiceProvider(), array(
-        'locale_fallback' => 'en',
+        'locale_fallbacks' => array('en'),
     ));
 
 .. note::
@@ -50,7 +51,7 @@ Registering
     .. code-block:: json
 
         "require": {
-            "symfony/translation": "2.1.*"
+            "symfony/translation": "~2.3"
         }
 
 Usage
@@ -126,8 +127,8 @@ file:
 .. code-block:: json
 
     "require": {
-        "symfony/config": "2.1.*",
-        "symfony/yaml": "2.1.*"
+        "symfony/config": "~2.3",
+        "symfony/yaml": "~2.3"
     }
 
 Next, you have to create the language mappings in YAML files. A naming you can
@@ -143,7 +144,7 @@ translation files::
 
     use Symfony\Component\Translation\Loader\YamlFileLoader;
 
-    $app['translator'] = $app->share($app->extend('translator', function($translator, $app) {
+    $app->extend('translator', function($translator, $app) {
         $translator->addLoader('yaml', new YamlFileLoader());
 
         $translator->addResource('yaml', __DIR__.'/locales/en.yml', 'en');
@@ -151,7 +152,7 @@ translation files::
         $translator->addResource('yaml', __DIR__.'/locales/fr.yml', 'fr');
 
         return $translator;
-    }));
+    });
 
 XLIFF-based language files
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

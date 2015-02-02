@@ -11,11 +11,12 @@
 
 namespace Silex\Provider;
 
-use Silex\Application;
-use Silex\ServiceProviderInterface;
+use Pimple\Container;
+use Pimple\ServiceProviderInterface;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Configuration;
 use Doctrine\Common\EventManager;
+use Symfony\Bridge\Doctrine\Logger\DbalLogger;
 
 /**
  * Doctrine DBAL Provider.
@@ -24,7 +25,7 @@ use Doctrine\Common\EventManager;
  */
 class DoctrineServiceProvider implements ServiceProviderInterface
 {
-    public function register(Application $app)
+    public function register(Container $app)
     {
         $app['db.default_options'] = array(
             'driver'   => 'pdo_mysql',
@@ -32,6 +33,7 @@ class DoctrineServiceProvider implements ServiceProviderInterface
             'host'     => 'localhost',
             'user'     => 'root',
             'password' => null,
+            'port'     => null,
         );
 
         $app['dbs.options.initializer'] = $app->protect(function () use ($app) {
@@ -58,10 +60,10 @@ class DoctrineServiceProvider implements ServiceProviderInterface
             $app['dbs.options'] = $tmp;
         });
 
-        $app['dbs'] = $app->share(function ($app) {
+        $app['dbs'] = function ($app) {
             $app['dbs.options.initializer']();
 
-            $dbs = new \Pimple();
+            $dbs = new Container();
             foreach ($app['dbs.options'] as $name => $options) {
                 if ($app['dbs.default'] === $name) {
                     // we use shortcuts here in case the default has been overridden
@@ -72,64 +74,57 @@ class DoctrineServiceProvider implements ServiceProviderInterface
                     $manager = $app['dbs.event_manager'][$name];
                 }
 
-                $dbs[$name] = DriverManager::getConnection($options, $config, $manager);
+                $dbs[$name] = function ($dbs) use ($options, $config, $manager) {
+                    return DriverManager::getConnection($options, $config, $manager);
+                };
             }
 
             return $dbs;
-        });
+        };
 
-        $app['dbs.config'] = $app->share(function ($app) {
+        $app['dbs.config'] = function ($app) {
             $app['dbs.options.initializer']();
 
-            $configs = new \Pimple();
+            $configs = new Container();
+            $addLogger = isset($app['logger']) && null !== $app['logger'] && class_exists('Symfony\Bridge\Doctrine\Logger\DbalLogger');
             foreach ($app['dbs.options'] as $name => $options) {
                 $configs[$name] = new Configuration();
+                if ($addLogger) {
+                    $configs[$name]->setSQLLogger(new DbalLogger($app['logger'], isset($app['stopwatch']) ? $app['stopwatch'] : null));
+                }
             }
 
             return $configs;
-        });
+        };
 
-        $app['dbs.event_manager'] = $app->share(function ($app) {
+        $app['dbs.event_manager'] = function ($app) {
             $app['dbs.options.initializer']();
 
-            $managers = new \Pimple();
+            $managers = new Container();
             foreach ($app['dbs.options'] as $name => $options) {
                 $managers[$name] = new EventManager();
             }
 
             return $managers;
-        });
+        };
 
         // shortcuts for the "first" DB
-        $app['db'] = $app->share(function ($app) {
+        $app['db'] = function ($app) {
             $dbs = $app['dbs'];
 
             return $dbs[$app['dbs.default']];
-        });
+        };
 
-        $app['db.config'] = $app->share(function ($app) {
+        $app['db.config'] = function ($app) {
             $dbs = $app['dbs.config'];
 
             return $dbs[$app['dbs.default']];
-        });
+        };
 
-        $app['db.event_manager'] = $app->share(function ($app) {
+        $app['db.event_manager'] = function ($app) {
             $dbs = $app['dbs.event_manager'];
 
             return $dbs[$app['dbs.default']];
-        });
-    }
-
-    public function boot(Application $app)
-    {
-        // BC: to be removed before 1.0
-        if (isset($app['db.dbal.class_path'])) {
-            throw new \RuntimeException('You have provided the db.dbal.class_path parameter. The autoloader has been removed from Silex. It is recommended that you use Composer to manage your dependencies and handle your autoloading. If you are already using Composer, you can remove the parameter. See http://getcomposer.org for more information.');
-        }
-
-        // BC: to be removed before 1.0
-        if (isset($app['db.common.class_path'])) {
-            throw new \RuntimeException('You have provided the db.common.class_path parameter. The autoloader has been removed from Silex. It is recommended that you use Composer to manage your dependencies and handle your autoloading. If you are already using Composer, you can remove the parameter. See http://getcomposer.org for more information.');
-        }
+        };
     }
 }
